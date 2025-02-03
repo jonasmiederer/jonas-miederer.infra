@@ -1,0 +1,98 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  jonas-miederer.infra
+
+  Sample SAM Template for jonas-miderer.de
+
+
+Parameters:
+  DomainName:
+    Type: String
+    Description: "The domain name of website"    
+  IndexDocument:
+    Type: String
+    Description: "The index document"
+    Default: "index.html"
+  CloudFrontPriceClass:
+    Type: String
+    Description: "The price class for CloudFront distribution"
+    Default: "PriceClass_100"
+    AllowedValues:
+      - PriceClass_100
+      - PriceClass_200
+      - PriceClass_All
+
+Resources:
+  Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref DomainName
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+  
+  OriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Ref AWS::StackName
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Ref AWS::StackName
+        DefaultRootObject: !Ref IndexDocument
+        HttpVersion: http2
+        #CustomErrorResponses:
+        #  - ErrorCachingMinTTL: 86400
+        #    ErrorCode: 403 # object not found in bucket
+        #    ResponseCode: !If [IsStaticMode, 404, 200]
+        #    ResponsePagePath: !If [IsStaticMode, !Sub "/${ErrorDocument}", !Sub "/${IndexDocument}"]
+        Origins:
+          - DomainName: !Sub "${Bucket}.s3.${AWS::Region}.amazonaws.com"
+            Id: bucketOrigin
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub origin-access-identity/cloudfront/${OriginAccessIdentity}
+        DefaultCacheBehavior:
+          Compress: true
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          TargetOriginId: bucketOrigin
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+          ViewerProtocolPolicy: redirect-to-https
+          #FunctionAssociations:
+          #  - EventType: viewer-request
+          #    FunctionARN: !If [IsStaticMode, !GetAtt RewriteRequestStaticFunction.FunctionMetadata.FunctionARN, !GetAtt RewriteRequestSpaFunction.FunctionMetadata.FunctionARN]
+        PriceClass: !Ref CloudFrontPriceClass
+        Aliases:
+          - !Ref DomainName
+        #ViewerCertificate:
+        #  AcmCertificateArn: !Ref AcmCertificateArn
+        #  SslSupportMethod: sni-only
+
+  # BucketPolicy:
+  #   Type: AWS::S3::BucketPolicy
+  #   Properties:
+  #     Bucket: !Ref Bucket
+  #     PolicyDocument: 
+  #       Statement: 
+  #         - Effect: "Allow"
+  #           Action: "s3:GetObject"
+  #           Resource: !Sub "arn:aws:s3:::${Bucket}/*"
+  #           Principal: 
+  #             #AWS: !Sub 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${OriginAccessIdentity}'
+
+Outputs:
+  BucketName:
+    Description: "The S3 bucket name where HTML files need to be uploaded"
+    Value: !Ref Bucket
