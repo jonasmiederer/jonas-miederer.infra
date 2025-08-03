@@ -269,4 +269,4 @@ Outputs:
     Value: !Ref Bucket
   ApiUrl:
     Description: "API Gateway endpoint URL for Prod stage"
-    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod"
+    Value: !Sub "https://${APIGateway}.execute-api.${AWS::Region}.amazonaws.com/prod"
