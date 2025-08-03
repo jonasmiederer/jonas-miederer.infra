@@ -19,4 +19,4 @@ jobs:
             aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
             aws-region: ${{env.AWS_REGION}}
       - run: sam build --use-container
-      - run: sam deploy --no-confirm-changeset --no-fail-on-empty-changeset --parameter-overrides DomainName=${{env.DOMAIN_NAME}},DomainKey=${{secrets.DOMAINKEY}},NotificationTargetEmail=${{vars.NOTIFICATION_TARGET_EMAIL}},AcmCertificateArn=${{secrets.ACMCERTIFICATEARN}}
+      - run: sam deploy --no-confirm-changeset --no-fail-on-empty-changeset --parameter-overrides ParameterKey=DomainName,ParameterValue=${{env.DOMAIN_NAME}} ParameterKey=DomainKey,ParameterValue=${{secrets.DOMAINKEY}} ParameterKey=NotificationTargetEmail,ParameterValue=${{vars.NOTIFICATION_TARGET_EMAIL}} ParameterKey=AcmCertificateArn,ParameterValue=${{secrets.ACMCERTIFICATEARN}}
