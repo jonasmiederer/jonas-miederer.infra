@@ -1,15 +1,14 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  jonas-miederer.infra
+  jonas-miederer.infra 
 
   Sample SAM Template for jonas-miderer.de
-
 
 Parameters:
   DomainName:
     Type: String
-    Description: "The domain name of website"    
+    Description: "The domain name of website"
   IndexDocument:
     Type: String
     Description: "The index document"
@@ -22,8 +21,50 @@ Parameters:
       - PriceClass_100
       - PriceClass_200
       - PriceClass_All
+  AcmCertificateArn:
+    Type: String
+    Description: "ARN of the certificate"
+  DomainKey:
+    Type: String
+    Description: Apple Domain Key
+  NotificationTargetEmail:
+    Type: String
+    Description: Email recipient
 
 Resources:
+  HostedZone:
+    Type: AWS::Route53::HostedZone
+    Properties:
+      Name: !Ref DomainName
+
+  RecordSetGroup:
+    Type: AWS::Route53::RecordSetGroup
+    Properties:
+      HostedZoneId: !Ref HostedZone
+      RecordSets:
+        - Name: !Ref DomainName
+          Type: MX
+          ResourceRecords:
+            - 10 mx01.mail.icloud.com.
+            - 10 mx02.mail.icloud.com.
+          TTL: "3600"
+        - Name: !Join [".", [sig1._domainkey, !Ref DomainName]]
+          Type: CNAME
+          ResourceRecords:
+            - !Sub sig1.dkim.${DomainName}.at.icloudmailadmin.com.
+          TTL: "3600"
+        - Name: !Ref DomainName
+          Type: TXT
+          ResourceRecords:
+            - !Sub '"apple-domain=${DomainKey}"'
+            - '"v=spf1 include:icloud.com ~all"'
+          TTL: "3600"
+        - Name: !Ref DomainName
+          Type: A
+          AliasTarget:
+            DNSName: !GetAtt Distribution.DomainName
+            HostedZoneId: Z2FDTNDATAQYW2
+
   Bucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -33,7 +74,7 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-  
+
   OriginAccessIdentity:
     Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
     Properties:
@@ -65,6 +106,7 @@ Resources:
             - HEAD
             - OPTIONS
           TargetOriginId: bucketOrigin
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
           ForwardedValues:
             QueryString: false
             Cookies:
@@ -76,23 +118,155 @@ Resources:
         PriceClass: !Ref CloudFrontPriceClass
         Aliases:
           - !Ref DomainName
-        #ViewerCertificate:
-        #  AcmCertificateArn: !Ref AcmCertificateArn
-        #  SslSupportMethod: sni-only
+        ViewerCertificate:
+          AcmCertificateArn: !Ref AcmCertificateArn
+          SslSupportMethod: sni-only
 
-  # BucketPolicy:
-  #   Type: AWS::S3::BucketPolicy
-  #   Properties:
-  #     Bucket: !Ref Bucket
-  #     PolicyDocument: 
-  #       Statement: 
-  #         - Effect: "Allow"
-  #           Action: "s3:GetObject"
-  #           Resource: !Sub "arn:aws:s3:::${Bucket}/*"
-  #           Principal: 
-  #             #AWS: !Sub 'arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${OriginAccessIdentity}'
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref Bucket
+      PolicyDocument:
+        Statement:
+          - Effect: "Allow"
+            Action: "s3:GetObject"
+            Resource: !Sub "arn:aws:s3:::${Bucket}/*"
+            Principal:
+              AWS: !Sub "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${OriginAccessIdentity}"
+
+  APIGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: ContactAPI
+      StageName: prod
+      Cors:
+        AllowCredentials: false
+        AllowMethods: "POST"
+        AllowOrigin: !Sub https://${DomainName}"
+      DefinitionBody:
+        swagger: "2.0"
+        info:
+          title: "ContactAPI"
+        paths:
+          /contact:
+            options:
+              consumes:
+                - "application/json"
+              produces:
+                - "application/json"
+              responses:
+                "200":
+                  description: "200 response"
+                  schema:
+                    $ref: "#/definitions/Empty"
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: "string"
+                    Access-Control-Allow-Methods:
+                      type: "string"
+                    Access-Control-Allow-Headers:
+                      type: "string"
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: "200"
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"                      
+                      method.response.header.Access-Control-Allow-Origin: !Sub "'https://${DomainName}'"
+                      method.response.header.Access-Control-Allow-Headers: "'*'"
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                passthroughBehavior: "never"
+                type: "mock"
+            post:
+              responses:
+                "200":
+                  description: "200 response"
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: "string"
+                    Access-Control-Allow-Methods:
+                      type: "string"
+                    Access-Control-Allow-Headers:
+                      type: "string"
+                "400":
+                  description: "Bad Request"
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: "string"
+                    Access-Control-Allow-Methods:
+                      type: "string"
+                    Access-Control-Allow-Headers:
+                      type: "string"
+                "500":
+                  description: "Internal Server Error"
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: "string"
+                    Access-Control-Allow-Methods:
+                      type: "string"
+                    Access-Control-Allow-Headers:
+                      type: "string"
+
+              x-amazon-apigateway-integration:
+                type: "aws"
+                httpMethod: "POST"
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:sns:path/${EmailNotificationTopic}"
+                credentials: !GetAtt ApiGatewaySNSRole.Arn
+                requestParameters:
+                  integration.request.header.Content-Type: "'application/x-www-form-urlencoded'"
+                requestTemplates:
+                  application/json: !Sub "Action=Publish&TopicArn=${EmailNotificationTopic}&Message=$input.body"
+                responses:
+                  "200":
+                    statusCode: "200"
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Origin: !Sub "'https://${DomainName}'"
+                      method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+                      method.response.header.Access-Control-Allow-Headers: "'*'"
+                  default:
+                    statusCode: "500"
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Origin: !Sub "'https://${DomainName}'"
+                      method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+                      method.response.header.Access-Control-Allow-Headers: "'*'"
+
+
+  ApiGatewaySNSRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service: "apigateway.amazonaws.com"
+            Action: "sts:AssumeRole"
+      Policies:
+        - PolicyName: "ApiGatewaySNSPublishPolicy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: "Allow"
+                Action: "sns:Publish"
+                Resource: !Ref EmailNotificationTopic
+
+  EmailNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: "API Request Notification"
+
+  EmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      Endpoint: !Ref NotificationTargetEmail
+      TopicArn: !Ref EmailNotificationTopic
 
 Outputs:
   BucketName:
     Description: "The S3 bucket name where HTML files need to be uploaded"
     Value: !Ref Bucket
+  ApiUrl:
+    Description: "API Gateway endpoint URL for Prod stage"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/prod"
