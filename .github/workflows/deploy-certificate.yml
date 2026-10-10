@@ -1,0 +1,24 @@
+env:
+  AWS_REGION: us-east-1
+  DOMAIN_NAME: jonas-miederer.de
+
+# Manual-only: the ACM certificate rarely changes and must be deployed to
+# us-east-1 (separate from the main eu-central-1 stack). Run this via the
+# "Run workflow" button, then complete the ACM DNS validation and copy the
+# CertificateArn output into the GitHub secret ACMCERTIFICATEARN.
+on:
+  workflow_dispatch:
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v3
+      - uses: aws-actions/setup-sam@v2
+      - uses: aws-actions/configure-aws-credentials@v1
+        with:
+            aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+            aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            aws-region: ${{env.AWS_REGION}}
+      - run: sam build --use-container --template certificate/template.yaml
+      - run: sam deploy --template certificate/template.yaml --stack-name jonas-miederer-certificate --region ${{env.AWS_REGION}} --no-confirm-changeset --no-fail-on-empty-changeset --resolve-s3 --capabilities CAPABILITY_IAM --parameter-overrides ParameterKey=DomainName,ParameterValue=${{env.DOMAIN_NAME}}
