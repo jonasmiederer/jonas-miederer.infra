@@ -64,6 +64,11 @@ Resources:
           AliasTarget:
             DNSName: !GetAtt Distribution.DomainName
             HostedZoneId: Z2FDTNDATAQYW2
+        - Name: !Sub "doubletop.${DomainName}"
+          Type: A
+          AliasTarget:
+            DNSName: !GetAtt DoubletopDistribution.DomainName
+            HostedZoneId: Z2FDTNDATAQYW2
 
   Bucket:
     Type: AWS::S3::Bucket
@@ -133,6 +138,63 @@ Resources:
             Resource: !Sub "arn:aws:s3:::${Bucket}/*"
             Principal:
               AWS: !Sub "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${OriginAccessIdentity}"
+
+  DoubletopBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "doubletop.${DomainName}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  DoubletopOriginAccessIdentity:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub "${AWS::StackName}-doubletop"
+
+  DoubletopDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub "${AWS::StackName}-doubletop"
+        DefaultRootObject: !Ref IndexDocument
+        HttpVersion: http2
+        Origins:
+          - DomainName: !Sub "${DoubletopBucket}.s3.${AWS::Region}.amazonaws.com"
+            Id: bucketOrigin
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub origin-access-identity/cloudfront/${DoubletopOriginAccessIdentity}
+        DefaultCacheBehavior:
+          Compress: true
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          TargetOriginId: bucketOrigin
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          ViewerProtocolPolicy: redirect-to-https
+        PriceClass: !Ref CloudFrontPriceClass
+        Aliases:
+          - !Sub "doubletop.${DomainName}"
+        ViewerCertificate:
+          AcmCertificateArn: !Ref AcmCertificateArn
+          SslSupportMethod: sni-only
+
+  DoubletopBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref DoubletopBucket
+      PolicyDocument:
+        Statement:
+          - Effect: "Allow"
+            Action: "s3:GetObject"
+            Resource: !Sub "arn:aws:s3:::${DoubletopBucket}/*"
+            Principal:
+              AWS: !Sub "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity ${DoubletopOriginAccessIdentity}"
 
   APIGateway:
     Type: AWS::Serverless::Api
@@ -270,3 +332,12 @@ Outputs:
   ApiUrl:
     Description: "API Gateway endpoint URL for Prod stage"
     Value: !Sub "https://${APIGateway}.execute-api.${AWS::Region}.amazonaws.com/prod"
+  DoubletopBucketName:
+    Description: "The S3 bucket name for the Double Top subdomain static files"
+    Value: !Ref DoubletopBucket
+  DoubletopDistributionDomain:
+    Description: "The CloudFront domain name for the Double Top subdomain distribution"
+    Value: !GetAtt DoubletopDistribution.DomainName
+  DoubletopDistributionId:
+    Description: "The CloudFront distribution ID for the Double Top subdomain"
+    Value: !Ref DoubletopDistribution
