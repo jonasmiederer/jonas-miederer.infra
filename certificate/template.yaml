@@ -1,0 +1,30 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  jonas-miederer.infra certificate stack
+
+  Standalone ACM certificate for CloudFront. Deploys to us-east-1 because
+  CloudFront ViewerCertificate ACM certs must live in us-east-1, while the
+  main infra stack (jonas-miederer-infra) deploys to eu-central-1.
+
+Parameters:
+  DomainName:
+    Type: String
+    Description: "The domain name of the website"
+    Default: "jonas-miederer.de"
+
+Resources:
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Sub "*.${DomainName}"
+      SubjectAlternativeNames:
+        - !Ref DomainName
+      ValidationMethod: DNS
+
+Outputs:
+  CertificateArn:
+    Description: "ARN of the ACM certificate (copy into the GitHub secret ACMCERTIFICATEARN)"
+    Value: !Ref Certificate
+    Export:
+      Name: jonas-miederer-certificate-arn
