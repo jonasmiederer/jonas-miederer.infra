@@ -69,6 +69,12 @@ Resources:
           AliasTarget:
             DNSName: !GetAtt DoubletopDistribution.DomainName
             HostedZoneId: Z2FDTNDATAQYW2
+        # Sous is deployed by its own CDK stack (Sous repo); only DNS lives here.
+        - Name: !Sub "sous.${DomainName}"
+          Type: A
+          AliasTarget:
+            DNSName: d1ly3o3di38rpe.cloudfront.net
+            HostedZoneId: Z2FDTNDATAQYW2
 
   Bucket:
     Type: AWS::S3::Bucket
