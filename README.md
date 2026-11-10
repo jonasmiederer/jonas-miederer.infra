@@ -73,6 +73,13 @@ Each subdomain's static files are deployed separately, from that app's own repos
 | Subdomain | App repository | Resource prefix |
 | --- | --- | --- |
 | `doubletop.jonas-miederer.de` | [Double-Top](https://github.com/jonasmiederer/Double-Top) | `Doubletop*` |
+| `sous.jonas-miederer.de` | [Sous](https://github.com/jonasmiederer/Sous) | DNS record only |
+
+`sous.jonas-miederer.de` is different: its S3 bucket and CloudFront distribution are owned by the
+Sous repository's CDK stack (`Sous`). This stack only holds the Route53 A-alias to that distribution
+(`d1ly3o3di38rpe.cloudfront.net`). The alias and wildcard certificate are attached to the distribution
+by the Sous stack (`customDomainName` / `customDomainCertificateArn` in its `cdk.json`). If the Sous
+distribution is ever recreated, update the alias target here.
 
 ### Adding a subdomain
 
